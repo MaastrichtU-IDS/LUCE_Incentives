@@ -1128,12 +1128,12 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
         bytes32 lastHash;
         if(tokens.length < 1){
             id = 1;
-            lastHash = keccak256(abi.encodePacked(uint(1)));
+            lastHash = keccak256(abi.encodePacked(uint(1), msg.sender, _license, _purposeCode));
         } else {
             lastHash = tokens[tokens.length.sub(1)].tokenHash;
             id = tokens.length.add(1);
         }
-        bytes32 tokenHash = keccak256(abi.encodePacked(id.add(uint(lastHash))));
+        bytes32 tokenHash = keccak256(abi.encodePacked(id.add(uint(lastHash)), msg.sender, _license, _purposeCode));
         tokens.push(LUCEToken(_license, _purposeCode, now.add(_accessTime), tokenHash));
         
         // introduce checksum composed of unique values to make sure token access can be verified easily
@@ -1524,17 +1524,18 @@ contract Dataset is destructible, ERC721 {
     /**
      * @dev Public function to return the link of the dataset, callable only by the dataProvider or authorized data requesters.
      * This function should become more or less obsolete once we implement the checksum for data access.
-     * @param _tokenId is the ID of the requester's token. The data provider can call the function with any numeric input.
      */
-    function getLink(uint _tokenId) public view returns(string memory) {
+    function getLink() public view returns(string memory) {
         if (msg.sender==dataProvider){
             return link;
         }
         require (requesterCompliance[msg.sender], "Access denied. Reconfirm compliance first.");
-        require (userOf(_tokenId) == msg.sender, "Operation not authorized");
-        require (tokens[_tokenId.sub(1)].accessTime > now, "Access time has expired.");
+        uint tokenId = mappedUsers[msg.sender];
+        require (userOf(tokenId) == msg.sender, "Operation not authorized");
+        require (tokens[tokenId.sub(1)].accessTime > now, "Access time has expired.");
         return link;
     }
+
 
     function getAllDataRequesters() public view onlyOwner returns(address[] memory) {
         require(addressIndices.length > 0, "There is no data requester yet.");
@@ -1690,8 +1691,13 @@ contract LuceMain is Dataset {
         _burn(tokenId);
         emit tokenBurned(user, tokenId, address(this), remainingAccessTime);
         mappedUsers[user] = 0; // indicate the user no longer has a token
-        requesterCompliance[user] = false; // Since the user doesn't have access anymore, they inherently comply (soft compliance).
-        // Hard compliance must be verified by the supervisory authority, if it is in question.
+        if (msg.sender == user) {
+            // If the data requester issues deletion of their token, they also intrinsicly agree to delete their copy of the dataset
+            requesterCompliance[user] = true; 
+        } else {
+            requesterCompliance[user] = false; // Since the user doesn't have access anymore, they inherently comply (soft compliance).
+            // Hard compliance must be verified by the supervisory authority, if it is in question.
+        }
     }
 
 
@@ -1904,6 +1910,7 @@ contract LUCERegistry {
      */
     function deregister() external {
         userRegistry[msg.sender] = 0;
+        providerRegistry[msg.sender] = false;
     }
 
     constructor() public {
