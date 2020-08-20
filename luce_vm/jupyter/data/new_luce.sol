@@ -1461,7 +1461,7 @@ contract Dataset is destructible, ERC721 {
 
     // Events allow light clients to react to changes efficiently.
     event Sent(address from, address to, uint token); // currently unused.
-    event publishedDataset(address publisher, string description, string link, uint license);
+    event publishedDataset(address publisher, string description, uint license);
     event updateDataset(address to, string uspdateDescr);
     
     
@@ -1484,7 +1484,7 @@ contract Dataset is destructible, ERC721 {
         currentCost = currentCost.add(gasCost);
     }
     
-    function setScenario(uint _scenario) public onlyOwner {
+    function setScenario(uint _scenario, uint _profitMargin) public onlyOwner {
         scenario = _scenario;
     }
     
@@ -1516,7 +1516,7 @@ contract Dataset is destructible, ERC721 {
         license = _license;
         link = _link;
         
-        emit publishedDataset(msg.sender, _description, _link, license); // Triggering event
+        emit publishedDataset(msg.sender, _description, license); // Triggering event
         unpublished = false;
     }
 
@@ -1600,6 +1600,7 @@ contract Dataset is destructible, ERC721 {
      * @param div is the denominator in the calculation.
      */
     function setMultis(uint mult, uint div) public onlyOwner providerGasCost {
+        require(mult <= div, "The given fraction is not below 1.");
         costMult = mult;
         costDiv = div;
     }
@@ -1799,8 +1800,9 @@ contract LuceMain is Dataset {
                 currentCost = currentCost.sub(individualCost);
             }
         }
-        //emit Sent(msg.sender, dataProvider, userTokens[msg.sender]++); // This event is not really necessary...
-        // Adds the new access time.
+        if(newAccessTime==0){
+            newAccessTime = 2 weeks;
+        }
         if(tokens[tokenId.sub(1)].accessTime > now){
             tokens[tokenId.sub(1)].accessTime = tokens[tokenId.sub(1)].accessTime.add(newAccessTime);
         } else {
